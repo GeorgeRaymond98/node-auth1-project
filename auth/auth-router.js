@@ -1,28 +1,12 @@
-const bc = require("bcryptjs");
-const router = require("express").Router();
+const router = require('express').Router();
+const bcrypt = require('bcryptjs');
 
-const Users = require("../users/users-model.js");
+const Users = require('../users/user-model');
 
-router.get("/secret", (req, res, next) => {
-    if (req.headers.authorization) {
-        bc.hash(req.headers.authorization, 8, (err, hash) => {
-            // 2^10 is the number of rounds
-            if (err) {
-                res.status(500).json({ oops: "it broke" });
-            } else {
-                res.status(200).json({ hash });
-            }
-        });
-    } else {
-        res.status(400).json({ error: "missing header" });
-    }
-});
 
-router.post("/register", (req, res) => {
+router.post('/register', (req, res) => {
     let user = req.body;
-
-    const hash = bc.hashSync(req.body.password, 8);
-
+    const hash = bcrypt.hashSync(user.password, 10);
     user.password = hash;
 
     Users.add(user)
@@ -34,21 +18,41 @@ router.post("/register", (req, res) => {
         });
 });
 
-router.post("/login", (req, res) => {
-    let { username, password } = req.body;
+router.post('/login', (req, res) => {
+    let {username, password} = req.body;
 
-    Users.findBy({ username })
+    Users.findBy(username)
         .first()
         .then(user => {
-            if (user && bc.compareSync(password, user.password)) {
-                res.status(200).json({ message: `Welcome ${user.username}!` });
+            if (user && bcrypt.compareSync(password, user.password)) {
+                console.log('workin')
+                req.session.logged_in = true;
+                req.session.user_id = user.id;
+                res.status(200).json({
+                    message: `Welcome ${user.username}!`,
+                });
             } else {
-                res.status(401).json({ message: "Invalid Credentials" });
+                res.status(401).json({message: 'Invalid Credentials'});
             }
         })
         .catch(error => {
             res.status(500).json(error);
         });
+});
+
+router.get('/logout', (req, res) => {
+    if (req.session && req.session.logged_in) {
+        req.session.destroy(err => {
+            if (err) {
+            	res.status(500).json({message: 'You can checkout but you can never leave.'})
+            } else {
+            	res.status(200).json({message: 'Thanks for your time.'})
+            }
+        });
+    } else {
+        res.json({message: 'You are not logged in.'});
+    }
+
 });
 
 module.exports = router;
